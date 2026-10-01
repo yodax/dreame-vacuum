@@ -39,7 +39,6 @@ from .const import (
     CONF_PREFER_CLOUD,
     CONF_MAP_OBJECTS,
     CONF_HIDDEN_MAP_OBJECTS,
-    CONF_DONATED,
     CONF_VERSION,
     MAP_OBJECTS,
     CONTENT_TYPE,
@@ -51,7 +50,6 @@ from .const import (
     NOTIFICATION_REPLACE_MAP,
     NOTIFICATION_DRAINAGE_COMPLETED,
     NOTIFICATION_DRAINAGE_FAILED,
-    NOTIFICATION_SPONSOR,
     NOTIFICATION_ID_DUST_COLLECTION,
     NOTIFICATION_ID_CLEANING_PAUSED,
     NOTIFICATION_ID_REPLACE_MAIN_BRUSH,
@@ -145,14 +143,6 @@ class DreameVacuumDataUpdateCoordinator(DataUpdateCoordinator[DreameVacuumDevice
                 del options[CONF_MAP_OBJECTS]
 
             options[CONF_VERSION] = VERSION
-            donated = options.get(CONF_DONATED)
-            if donated != True:
-                persistent_notification.create(
-                    hass=hass,
-                    message=NOTIFICATION_SPONSOR,
-                    title="Dreame Vacuum",
-                    notification_id=f"{DOMAIN}_sponsor",
-                )
             hass.config_entries.async_update_entry(entry=entry, options=options)
 
         self._device = DreameVacuumDevice(

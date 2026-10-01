@@ -42,11 +42,9 @@ from .const import (
     CONF_PREFER_CLOUD,
     CONF_LOW_RESOLUTION,
     CONF_SQUARE,
-    CONF_DONATED,
     CONF_VERSION,
     NOTIFICATION,
     MAP_OBJECTS,
-    SPONSOR,
 )
 
 
@@ -116,15 +114,6 @@ class DreameVacuumOptionsFlowHandler(OptionsFlow):
                         ): bool,
                     }
                 )
-
-            data_schema = data_schema.extend(
-                {
-                    vol.Required(
-                        CONF_DONATED,
-                        default=self._config_entry.options.get(CONF_DONATED, False),
-                    ): bool
-                }
-            )
 
         return self.async_show_form(
             step_id="init",
@@ -572,7 +561,7 @@ class DreameVacuumFlowHandler(ConfigFlow, domain=DOMAIN):
                 CONF_PREFER_CLOUD: self.prefer_cloud,
             }
 
-            return await self.async_step_donation()
+            return self._async_create_dreame_entry()
 
         data_schema = vol.Schema(
             {
@@ -611,39 +600,24 @@ class DreameVacuumFlowHandler(ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(step_id="options", data_schema=data_schema, errors={})
 
-    async def async_step_donation(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        if user_input is not None:
-            self.options = self.options | {CONF_DONATED: user_input.get(CONF_DONATED, False), CONF_VERSION: VERSION}
+    def _async_create_dreame_entry(self) -> FlowResult:
+        self.options = self.options | {CONF_VERSION: VERSION}
 
-            return self.async_create_entry(
-                title=self.name,
-                data={
-                    CONF_NAME: self.name,
-                    CONF_HOST: self.host,
-                    CONF_TOKEN: self.token,
-                    CONF_USERNAME: self.username,
-                    CONF_PASSWORD: self.password,
-                    CONF_COUNTRY: self.country,
-                    CONF_MAC: self.mac,
-                    CONF_DID: self.device_id,
-                    CONF_AUTH_KEY: self.protocol.cloud.auth_key if self.protocol and self.protocol.cloud else None,
-                    CONF_ACCOUNT_TYPE: self.account_type,
-                },
-                options=self.options,
-            )
-
-        return self.async_show_form(
-            step_id="donation",
-            data_schema=vol.Schema(
-                {
-                    vol.Optional(
-                        CONF_DONATED,
-                        default=False,
-                    ): bool
-                }
-            ),
-            description_placeholders={"text": SPONSOR},
-            errors={},
+        return self.async_create_entry(
+            title=self.name,
+            data={
+                CONF_NAME: self.name,
+                CONF_HOST: self.host,
+                CONF_TOKEN: self.token,
+                CONF_USERNAME: self.username,
+                CONF_PASSWORD: self.password,
+                CONF_COUNTRY: self.country,
+                CONF_MAC: self.mac,
+                CONF_DID: self.device_id,
+                CONF_AUTH_KEY: self.protocol.cloud.auth_key if self.protocol and self.protocol.cloud else None,
+                CONF_ACCOUNT_TYPE: self.account_type,
+            },
+            options=self.options,
         )
 
     def extract_info(self, device_info: dict[str, Any]) -> None:
