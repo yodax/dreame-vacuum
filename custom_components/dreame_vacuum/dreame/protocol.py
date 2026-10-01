@@ -23,12 +23,6 @@ from .exceptions import DeviceException
 
 from . import VERSION
 
-DATA_URL: Final = (
-    "aHR0cHM6Ly93d3cuZ29vZ2xlLWFuYWx5dGljcy5jb20vbXAvY29sbGVjdD9tZWFzdXJlbWVudF9pZD1HLTcwN1g2N0MzWlAmYXBpX3NlY3JldD1jX2taVDJlV1N1Q3Q4Q2swTGdtaE1n"
-)
-DATA_JSON: Final = (
-    "e3siY2xpZW50X2lkIjoiezB9IiwiZXZlbnRzIjpbe3sicGFyYW1zIjp7eyJ2ZXJzaW9uIjoiezF9IiwibW9kZWwiOiJ7Mn0iLCJkZXZpY2VfaWQiOiJ7MH0iLCJzZXNzaW9uX2lkIjp7M30sImVuZ2FnZW1lbnRfdGltZV9tc2VjIjoxMDB9fSwibmFtZSI6Ins0fSJ9fV19fQ=="
-)
 DREAME_STRINGS: Final = (
     "H4sICAAAAAAEAGNsb3VkX3N0cmluZ3MuanNvbgCNU9tuGjEQ/RUUKaiVyt5ALFWUBwpCSatqmwBpkqpCg+3ddePL1ja59Os7tklJ+pR9WM+Z+xx7fhwlXLuEGgaSJY6R9ujDUT4sxiWel9MncTM7ruXyS1cer36jah4cN0sJxrVasrRI8uRj7x3/1mrFTnq8WvbySTJK8pPekoBg6TDJsvc+KZlk22E5KbdFMR6X5XhLKBlN8npY0kkNo2ILeQbDDOpJDmNaD3IM+gSWk97t2Wdx8z0X18XigZzdPFZ3i4treVlcnHXTdb64vVJtVc2bUwzIwoeCdeB2FgUJ1jGz5hTlLVd0riVwhaAzumPGPaGIFJxTrxLgam3k6Xm17FuC9lMQot8YUG7jnhCik2G1YbbdOH3HVP8V8uYOrH3QhvZ3lhkFMsT0n7UBhExAiN4phziN7A9g59pUh3/IhiZ0YtbG5IfS/zB77DgqNjwaG6694Jjy/YaJ96l9LwOcMs7qkaciosjUwULBgY9k95wwFAS37qrwdlXraKhWs/MItCNeCnMbkHbvH3Djo6WmTITuCI5vDy1htQHR0l8VU3SmpYTnjmoufKg/PIH7u/Kxnjk8Wiyhjb+5hrl5aHQeu7b/4XksNkVSEa09DdOGKXcwXQqCwDtow/+AixyuAoeD8CpmWjmGYBWLQ9cJToJj+ssG726Dv82+Hf2ghAa6NiIqKmtz+kobd07qexj4jUsiDV8Rv1isPCmS0VsWKyRzRu/umXmZbxVVr1Jmb9vV1FM/2BpOG5b6N5EGnrknduEv5+dfaHOmATgEAAA="
 )
@@ -434,30 +428,6 @@ class DreameVacuumDreameHomeCloudProtocol:
                     _LOGGER.warning("Unsupported device: %s", device)
                     unsupported_devices.append(device)
 
-            if mac is None:
-                try:
-                    session_id = random.randint(1000, 100000000)
-                    for device in all_devices:
-                        model = device["model"]
-                        if ".vacuum." in model:
-                            device_id = hashlib.sha256(
-                                (device["mac"].replace(":", "").lower()).encode(encoding="UTF-8")
-                            ).hexdigest()
-                            requests.post(
-                                base64.b64decode(DATA_URL),
-                                data=base64.b64decode(DATA_JSON)
-                                .decode("utf-8")
-                                .format(
-                                    device_id,
-                                    VERSION,
-                                    model,
-                                    session_id,
-                                    "device" if model in models else "unsupported_device",
-                                ),
-                                timeout=5,
-                            )
-                except:
-                    pass
         return devices, unsupported_devices
 
     def get_devices(self) -> Any:
@@ -1499,30 +1469,6 @@ class DreameVacuumMiHomeCloudProtocol:
                 elif ".vacuum." in model:
                     unsupported_devices.append(device)
 
-            if mac is None:
-                try:
-                    session_id = random.randint(1000, 100000000)
-                    for device in all_devices:
-                        model = device["model"]
-                        if ".vacuum." in model:
-                            device_id = hashlib.sha256(
-                                (device["mac"].replace(":", "").lower()).encode(encoding="UTF-8")
-                            ).hexdigest()
-                            requests.post(
-                                base64.b64decode(DATA_URL),
-                                data=base64.b64decode(DATA_JSON)
-                                .decode("utf-8")
-                                .format(
-                                    device_id,
-                                    VERSION,
-                                    model,
-                                    session_id,
-                                    "device" if model in models else "unsupported_device",
-                                ),
-                                timeout=5,
-                            )
-                except:
-                    pass
         return devices, unsupported_devices
 
     def get_devices(self) -> Any:
@@ -1825,26 +1771,6 @@ class DreameVacuumProtocol:
             if info:
                 self._connected = True
 
-        if info and not self._ready:
-            try:
-                device_id = hashlib.sha256((info["mac"].replace(":", "").lower()).encode(encoding="UTF-8")).hexdigest()
-                response = requests.post(
-                    base64.b64decode(DATA_URL),
-                    data=base64.b64decode(DATA_JSON)
-                    .decode("utf-8")
-                    .format(
-                        device_id,
-                        VERSION,
-                        info["model"],
-                        random.randint(1000, 100000000),
-                        "connect",
-                    ),
-                    timeout=5,
-                )
-                if response:
-                    self._ready = True
-            except:
-                pass
         return info
 
     def disconnect(self):
