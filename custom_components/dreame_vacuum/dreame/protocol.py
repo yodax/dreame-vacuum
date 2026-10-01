@@ -8,6 +8,7 @@ import requests
 import zlib
 import ssl
 import queue
+import os
 from threading import Thread, Timer
 from time import sleep
 import time, locale
@@ -22,6 +23,8 @@ import re
 from .exceptions import DeviceException
 
 from . import VERSION
+
+MQTT_CA_FILE: Final = os.path.join(os.path.dirname(__file__), "dreame_iot_mqtt_ca.pem")
 
 DREAME_STRINGS: Final = (
     "H4sICAAAAAAEAGNsb3VkX3N0cmluZ3MuanNvbgCNU9tuGjEQ/RUUKaiVyt5ALFWUBwpCSatqmwBpkqpCg+3ddePL1ja59Os7tklJ+pR9WM+Z+xx7fhwlXLuEGgaSJY6R9ujDUT4sxiWel9MncTM7ruXyS1cer36jah4cN0sJxrVasrRI8uRj7x3/1mrFTnq8WvbySTJK8pPekoBg6TDJsvc+KZlk22E5KbdFMR6X5XhLKBlN8npY0kkNo2ILeQbDDOpJDmNaD3IM+gSWk97t2Wdx8z0X18XigZzdPFZ3i4treVlcnHXTdb64vVJtVc2bUwzIwoeCdeB2FgUJ1jGz5hTlLVd0riVwhaAzumPGPaGIFJxTrxLgam3k6Xm17FuC9lMQot8YUG7jnhCik2G1YbbdOH3HVP8V8uYOrH3QhvZ3lhkFMsT0n7UBhExAiN4phziN7A9g59pUh3/IhiZ0YtbG5IfS/zB77DgqNjwaG6694Jjy/YaJ96l9LwOcMs7qkaciosjUwULBgY9k95wwFAS37qrwdlXraKhWs/MItCNeCnMbkHbvH3Djo6WmTITuCI5vDy1htQHR0l8VU3SmpYTnjmoufKg/PIH7u/Kxnjk8Wiyhjb+5hrl5aHQeu7b/4XksNkVSEa09DdOGKXcwXQqCwDtow/+AixyuAoeD8CpmWjmGYBWLQ9cJToJj+ssG726Dv82+Hf2ghAa6NiIqKmtz+kobd07qexj4jUsiDV8Rv1isPCmS0VsWKyRzRu/umXmZbxVVr1Jmb9vV1FM/2BpOG5b6N5EGnrknduEv5+dfaHOmATgEAAA="
@@ -315,8 +318,10 @@ class DreameVacuumDreameHomeCloudProtocol:
                             self._client.on_disconnect = DreameVacuumDreameHomeCloudProtocol._on_client_disconnect
                             self._client.on_message = DreameVacuumDreameHomeCloudProtocol._on_client_message
                             self._client.reconnect_delay_set(1, 15)
-                            self._client.tls_set(cert_reqs=ssl.CERT_NONE)
-                            self._client.tls_insecure_set(True)
+                            # Verify the broker: Dreame's MQTT endpoints use a private CA (pinned
+                            # in dreame_iot_mqtt_ca.pem), with hostname checking left on.
+                            self._client.tls_set(ca_certs=MQTT_CA_FILE, cert_reqs=ssl.CERT_REQUIRED)
+                            self._client.tls_insecure_set(False)
                             self._set_client_key()
                             self._client.connect_timeout = 10
                             self._client.disable_logger()
