@@ -11,9 +11,6 @@ import copy
 import os
 import socket
 import ssl
-import struct
-import warnings
-import errno
 import gzip
 from threading import Thread, Lock
 from time import sleep
@@ -23,15 +20,6 @@ from paho.mqtt.client import Client
 from typing import Any, Dict, Final, Optional, Tuple
 from Crypto.Cipher import ARC4, AES
 from Crypto.Util.Padding import pad
-import certifi
-from cryptography import x509
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.asymmetric import x25519, ec, padding
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM, ChaCha20Poly1305
-from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
-from cryptography.utils import CryptographyDeprecationWarning
-from cryptography.x509.verification import PolicyBuilder, Store
-from OpenSSL.crypto import X509, X509Store, X509StoreContext
 from miio.miioprotocol import MiIOProtocol
 from urllib.parse import urlparse, parse_qs, quote, urljoin, urlsplit
 import re
@@ -43,28 +31,10 @@ DREAME_STRINGS: Final = (
     "H4sIAAAAAAAC/41U23LiOBD9FSpVQ81uLcYy4eJN8UDCMDCzCRtuAbamKCEJW4ksOZaAwNevWjYJzFN4MH36pu6jbv135XFlPJoxnDDPMBJf/XWFakGjaf9HnYNY3H3ZJOOfafPL5NWqus5xNU5wZmKVsGrgIS8sfeX/xkqymxIfjkuo5V176KY0Jliwas3z/T9s5C3WnJSW/R9i8YTEPOjtSX/xNnzpPc6TUfDYTztT1FvOZDwcdqO2DfDdzwraYLPVVkiwNiybcmrlNZe0qxLMpQVpplKWmYMVbTcDsJdTrPVeZRRSVfP+Knhr4qpyX6NeGIRiQpjWqxPM2CZjOn7H7C3lVrHiuTHiCgTDJJZm5QopUm81yyr28LwEQFBhjt4bKCwUGwyRbMcJs4Lg2swCsMuNyg3Dyd0gB8qQQkpxhhNd+DscQXSiKBOuOmLb1R8l2dMqRCXAIJP0TiUJPlW04QJC4U9a14JCiDWHFGBsj1AZEBox03WFdvOq9W/4jFqLpkBDJ2ISCgSdyvgRm3PaKo42oqSFplKch9NUcOIcq8/aeaer4nS1l0JhOs1Erhhqjeil1g1xona4AiPs5V3fW3w2qcgLvOvPTKpLZjK13dlezvJNctVFSv9zw18FpivrjNOIVWEEqo5WDjz28rv49m3yrI/bP+eD+lH29QB65dGbSF73y19N9bSc9qCne+oHz4fR63G7QY+3448LSJi7DrJr49WHNhPkA6QamJdsD9fII3clPGF2PJMU1t4P/IZfczuHrFSv13LRquo1mE/1EhuTVm2DgQemriXC9oj80ldqxb+5gmbXT2GwmIUx6Xcas2f6z9p/UJMeuaYv8e1jrddfRG1YyhuC5Q7rPtaxg3u2jsQ72nHN7QQO6EkTZbByMC7t02qXNbF738ZClFOBzUZlSbvz0B0NB92yc7TLrbbSlIFxmHPIU3aq7OBkgWX0W/KLF+DTJ1xEQUba/7Gj86UgIifiYX7r33+fNai/R5PjqH//PWzgvSOiYDG8ILFQNi6U9dOTiNw3Vu4dOK2S3eXILaGx3eiNHV4miaJcRmdOlyrJSLGb8A6ml+ZNgDBtXrN6iBsIoTVDtEX8ALFGfd0KEQlwYNWNJl6vW6TO/GbI/JAFpIVbtVoIc5e8GnP163+JjsKlZAYAAA=="
 )
 
-DREAME_CLIENT_ROOT_CA: Final = b"""-----BEGIN CERTIFICATE-----
-MIIDDzCCAfegAwIBAgIJAPvMK3fFXUEgMA0GCSqGSIb3DQEBCwUAMB0xGzAZBgNV
-BAMMEkdsb2JhbFNpZ24gUm9vdCBDQTAgFw02OTEyMzExNjAwMDBaGA8yOTY5MDUw
-MjE2MDAwMFowHTEbMBkGA1UEAwwSR2xvYmFsU2lnbiBSb290IENBMIIBIjANBgkq
-hkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAtdVI+1rZpIpB8YlmnzWFnvJyGzlBbxEh
-RwgSanox6OypwX27htEFFJzMxz5YGv9nABm3b3SUB+0zcAkJYw/Q9lZoT1w0m9Cr
-5KJMxofpD8JjsZWFE5hvJ5NIyRS4tOgimGsIfvHGMzihZ9sLnq7kBtX7u5hIv/A5
-eSvifaroS2NombTFMQrV6ZNIvpFALbMUbp02+mexm7P59c7OzJVupQAWJSFOepIu
-UwhyYLe1oR/HTiKcIuzDSp49QxhSNYuLpSUOYo/YU4GTMoKEhXD7u+AyeOzuHrnV
-H7+/U7TlXFtMkyt+ZwQw+s8+/jzi4v9jG5XL82uVbr2FN0EC0PEhrwIDAQABo1Aw
-TjAdBgNVHQ4EFgQUQXiLQz2aun8vl2Hy1RCja8nZ4qMwHwYDVR0jBBgwFoAUQXiL
-Qz2aun8vl2Hy1RCja8nZ4qMwDAYDVR0TBAUwAwEB/zANBgkqhkiG9w0BAQsFAAOC
-AQEAaAuVj1RNRRXfV7wk2VtLr6aKPoi7mlG9OSijHxAbmwV1KMyGR6gUpqToBpe/
-xQN+AjJK1Unex0hkN7+RZhpe8ajWqtniZ+oq9Xd+be0JW2KqZmA18r5arJj4DiCt
-Asa557/RNxuiIMc/uwvPtVq2C9uPX562esS02e2bRODH+l+aKcFzeCKotccJGej7
-NrfwypYpmoqrwko/4pe9cMBc3O1CLl2ZYy+YreHMFitmL6xGnC4a6HuTcZgK/ntj
-zewB8u+e2dMQwnBclahtLtb8oMmCHCWlgMTVU1MrjlWldvULalpMnIE5gsHKNXeC
-z0PJitlGIfun4TuQQhVCf5B2aA==
------END CERTIFICATE-----
-"""
 
 _LOGGER = logging.getLogger(__name__)
+
+MQTT_CA_FILE: Final = os.path.join(os.path.dirname(__file__), "dreame_iot_mqtt_ca.pem")
 
 
 def _run_callback(callback, response) -> None:
@@ -133,568 +103,38 @@ class DreameVacuumDeviceProtocol(MiIOProtocol):
 
 class DreameVacuumDreameHomeCloudProtocol:
     class DreameTLSSocket:
-        @staticmethod
-        def _expand_label(secret, label, context, length, h):
-            lbl = b"tls13 " + label
-            info = struct.pack("!H", length) + bytes([len(lbl)]) + lbl + bytes([len(context)]) + context
-            out = b""
-            t = b""
-            i = 1
-            while len(out) < length:
-                t = hmac.new(secret, t + info + bytes([i]), h).digest()
-                out += t
-                i += 1
-            return out[:length]
+        """Verified TLS connection for the HTTPS API: system CA store, hostname checked."""
 
-        @staticmethod
-        def _prf(secret, label, seed, length, h):
-            seed = label + seed
-            a = seed
-            out = b""
-            while len(out) < length:
-                a = hmac.new(secret, a, h).digest()
-                out += hmac.new(secret, a + seed, h).digest()
-            return out[:length]
-
-        _store = None
-        _store_lock = Lock()
-
-        def _verify_chain(self, body, tls13):
-            chain = []
-            try:
-                i = 1 + body[0] if tls13 else 0
-                end = i + 3 + int.from_bytes(body[i : i + 3], "big")
-                i += 3
-                while i < end:
-                    n = int.from_bytes(body[i : i + 3], "big")
-                    chain.append(x509.load_der_x509_certificate(body[i + 3 : i + 3 + n]))
-                    i += 3 + n
-                    if tls13:
-                        i += 2 + int.from_bytes(body[i : i + 2], "big")
-                if self._private_ca:
-                    store = X509Store()
-                    store.add_cert(X509.from_cryptography(x509.load_pem_x509_certificate(DREAME_CLIENT_ROOT_CA)))
-                    try:
-                        X509StoreContext(
-                            store,
-                            X509.from_cryptography(chain[0]),
-                            [X509.from_cryptography(c) for c in chain[1:]],
-                        ).verify_certificate()
-                        return chain[0].public_key()
-                    except Exception:
-                        pass
-                cls = type(self)
-                with cls._store_lock:
-                    if cls._store is None:
-                        certs = []
-                        with warnings.catch_warnings():
-                            warnings.simplefilter("ignore", CryptographyDeprecationWarning)
-                            for der in ssl.create_default_context(cafile=certifi.where()).get_ca_certs(True):
-                                try:
-                                    certs.append(x509.load_der_x509_certificate(der))
-                                except ValueError:
-                                    pass
-                        cls._store = Store(certs)
-                policy = PolicyBuilder().store(cls._store)
-                policy.build_server_verifier(x509.DNSName(self._sni)).verify(chain[0], chain[1:])
-                return chain[0].public_key()
-            except Exception as ex:
-                leaf = ""
-                if chain:
-                    subject, issuer = chain[0].subject.rfc4514_string(), chain[0].issuer.rfc4514_string()
-                    leaf = f" (server certificate {subject}, issuer {issuer})"
-                raise ConnectionError(f"certificate verify failed: {ex}{leaf}") from ex
-
-        @staticmethod
-        def _verify_signature(key, scheme, signature, data):
-            try:
-                if scheme in (0x0804, 0x0805, 0x0806):
-                    h = {0x0804: hashes.SHA256, 0x0805: hashes.SHA384, 0x0806: hashes.SHA512}[scheme]()
-                    key.verify(signature, data, padding.PSS(padding.MGF1(h), h.digest_size), h)
-                elif scheme in (0x0201, 0x0401, 0x0501, 0x0601):
-                    h = {2: hashes.SHA1, 4: hashes.SHA256, 5: hashes.SHA384, 6: hashes.SHA512}[scheme >> 8]()
-                    key.verify(signature, data, padding.PKCS1v15(), h)
-                elif scheme in (0x0403, 0x0503):
-                    key.verify(signature, data, ec.ECDSA(hashes.SHA256() if scheme == 0x0403 else hashes.SHA384()))
-                else:
-                    raise ValueError(f"unexpected signature scheme {scheme:#06x}")
-            except Exception as ex:
-                raise ConnectionError(f"server signature verify failed: {ex}") from ex
-
-        def __init__(self, host, port, server_name, timeout, strings, private_ca=False):
+        def __init__(self, host, port, server_name, timeout, strings=None):
             self._host = host
             self._port = port
             self._sni = server_name
-            self._private_ca = private_ca
             self._timeout = timeout
-            self._strings = strings
             self._sock = None
-            self._rbuf = b""
-            self._appbuf = b""
-            self._tls12 = False
 
         def __getattr__(self, name):
             return getattr(self._sock, name)
 
-        def _read_record(self):
-            while len(self._rbuf) < 5:
-                d = self._sock.recv(65536)
-                if not d:
-                    raise ConnectionError("connection closed during handshake")
-                self._rbuf += d
-            ln = (self._rbuf[3] << 8) | self._rbuf[4]
-            while len(self._rbuf) < 5 + ln:
-                d = self._sock.recv(65536)
-                if not d:
-                    raise ConnectionError("connection closed during handshake")
-                self._rbuf += d
-            typ = self._rbuf[0]
-            body = self._rbuf[5 : 5 + ln]
-            self._rbuf = self._rbuf[5 + ln :]
-            return typ, body
-
         def connect(self):
-            self._sock = socket.create_connection((self._host, self._port), timeout=self._timeout)
-            self._sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            raw = socket.create_connection((self._host, self._port), self._timeout)
             try:
-                self._sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
-                for opt, val in (("TCP_KEEPIDLE", 60), ("TCP_KEEPINTVL", 15), ("TCP_KEEPCNT", 4)):
-                    if hasattr(socket, opt):
-                        self._sock.setsockopt(socket.IPPROTO_TCP, getattr(socket, opt), val)
-            except OSError:
-                pass
-            priv = x25519.X25519PrivateKey.generate()
-            pub = priv.public_key().public_bytes_raw()
-            ext = b""
-            sni = self._sni.encode("idna") if self._sni else b""
-            sni_list = struct.pack("!BH", 0, len(sni)) + sni
-            ext += struct.pack("!HH", 0, len(sni_list) + 2) + struct.pack("!H", len(sni_list)) + sni_list
-            ext += struct.pack("!HH", 23, 0)
-            ext += struct.pack("!HH", 65281, 1) + b"\x00"
-            g = b"".join(struct.pack("!H", x) for x in [0x001D, 0x0017, 0x0018])
-            ext += struct.pack("!HH", 10, len(g) + 2) + struct.pack("!H", len(g)) + g
-            ext += struct.pack("!HH", 11, 2) + b"\x01\x00"
-            ext += struct.pack("!HH", 35, 0)
-            sa = b"".join(
-                struct.pack("!H", x) for x in [0x0403, 0x0804, 0x0401, 0x0503, 0x0805, 0x0501, 0x0806, 0x0601, 0x0201]
-            )
-            ext += struct.pack("!HH", 13, len(sa) + 2) + struct.pack("!H", len(sa)) + sa
-            ks = struct.pack("!HH", 0x001D, len(pub)) + pub
-            ext += struct.pack("!HH", 51, len(ks) + 2) + struct.pack("!H", len(ks)) + ks
-            ext += struct.pack("!HH", 45, 2) + b"\x01\x01"
-            ext += struct.pack("!HH", 43, 5) + b"\x04\x03\x04\x03\x03"
-            chbody = b"\x03\x03" + os.urandom(32) + bytes([32]) + os.urandom(32)
-            cs = b"".join(
-                struct.pack("!H", c)
-                for c in [
-                    0x1303,
-                    0x1301,
-                    0x1302,
-                    0xCCA9,
-                    0xCCA8,
-                    0xC02B,
-                    0xC02F,
-                    0xC02C,
-                    0xC030,
-                    0xC009,
-                    0xC013,
-                    0xC00A,
-                    0xC014,
-                    0x009C,
-                    0x009D,
-                    0x002F,
-                    0x0035,
-                ]
-            )
-            chbody += struct.pack("!H", len(cs)) + cs + b"\x01\x00"
-            msg_len = 4 + len(chbody) + 2 + len(ext)
-            if 256 <= msg_len < 512:
-                need = 512 - msg_len - 4
-                if need < 0:
-                    need = 0
-                ext += struct.pack("!HH", 21, need) + b"\x00" * need
-            chbody += struct.pack("!H", len(ext)) + ext
-            ch = struct.pack("!B", 1) + struct.pack("!I", len(chbody))[1:] + chbody
-            self._client_random = ch[6:38]
-            transcript = ch
-            self._sock.sendall(b"\x16\x03\x01" + struct.pack("!H", len(ch)) + ch)
-
-            typ, sh = self._read_record()
-            while typ == 20:
-                typ, sh = self._read_record()
-            if typ == 21:
-                raise ConnectionError(f"server sent alert {sh[1]}" if len(sh) >= 2 else "server sent alert")
-            if typ != 22 or not sh or sh[0] != 2:
-                raise ConnectionError("expected ServerHello")
-            i = 6 + 32
-            sidlen = sh[i]
-            i += 1 + sidlen
-            self._cipher = (sh[i] << 8) | sh[i + 1]
-            i += 3
-            extlen = (sh[i] << 8) | sh[i + 1]
-            i += 2
-            end = i + extlen
-            srv_pub = None
-            self._ems = False
-            is_hrr = sh[6:38] == bytes.fromhex(self._strings[89])
-            while i + 4 <= end:
-                et = (sh[i] << 8) | sh[i + 1]
-                el = (sh[i + 2] << 8) | sh[i + 3]
-                ed = sh[i + 4 : i + 4 + el]
-                i += 4 + el
-                if et == 51 and len(ed) >= 4:
-                    kl = (ed[2] << 8) | ed[3]
-                    srv_pub = ed[4 : 4 + kl]
-                elif et == 23:
-                    self._ems = True
-            if is_hrr:
-                raise ConnectionError("server requested retry")
-            if srv_pub is None:
-                return self._handshake_tls12(transcript, sh)
-
-            self._h = hashlib.sha384 if self._cipher == 0x1302 else hashlib.sha256
-            self._hlen = 48 if self._cipher == 0x1302 else 32
-            self._keylen = 16 if self._cipher == 0x1301 else 32
-            h, hlen = self._h, self._hlen
-            transcript += sh
-            shared = priv.exchange(x25519.X25519PublicKey.from_public_bytes(srv_pub))
-            zero = b"\x00" * hlen
-            early = hmac.new(zero, zero, h).digest()
-            derived = self._expand_label(early, b"derived", h(b"").digest(), hlen, h)
-            hs_secret = hmac.new(derived, shared, h).digest()
-            c_hs = self._expand_label(hs_secret, b"c hs traffic", h(transcript).digest(), hlen, h)
-            s_hs = self._expand_label(hs_secret, b"s hs traffic", h(transcript).digest(), hlen, h)
-            c_hs_key = self._expand_label(c_hs, b"key", b"", self._keylen, h)
-            c_hs_iv = self._expand_label(c_hs, b"iv", b"", 12, h)
-            s_hs_key = self._expand_label(s_hs, b"key", b"", self._keylen, h)
-            s_hs_iv = self._expand_label(s_hs, b"iv", b"", 12, h)
-
-            sseq = 0
-            buf = b""
-            got_fin = False
-            cert_key = None
-            cert_verified = False
-            while not got_fin:
-                typ, body = self._read_record()
-                if typ == 20:
-                    continue
-                if typ == 21:
-                    raise ConnectionError(f"server sent alert {body[1]}" if len(body) >= 2 else "server sent alert")
-                aad = bytes([typ]) + b"\x03\x03" + struct.pack("!H", len(body))
-                nonce = bytes(a ^ b for a, b in zip(s_hs_iv, b"\x00\x00\x00\x00" + struct.pack("!Q", sseq)))
-                cipher = ChaCha20Poly1305(s_hs_key) if self._cipher == 0x1303 else AESGCM(s_hs_key)
-                pt = cipher.decrypt(nonce, body, aad)
-                sseq += 1
-                pt = pt.rstrip(b"\x00")
-                if not pt or pt[-1] != 22:
-                    continue
-                buf += pt[:-1]
-                while len(buf) >= 4:
-                    mlen = (buf[1] << 16) | (buf[2] << 8) | buf[3]
-                    if len(buf) < 4 + mlen:
-                        break
-                    msg = buf[: 4 + mlen]
-                    buf = buf[4 + mlen :]
-                    if msg[0] == 11:
-                        cert_key = self._verify_chain(msg[4:], True)
-                    elif msg[0] == 15 and cert_key is not None:
-                        scheme = (msg[4] << 8) | msg[5]
-                        if scheme not in (0x0403, 0x0503, 0x0804, 0x0805, 0x0806):
-                            raise ConnectionError(f"signature scheme {scheme:#06x} not allowed in TLS 1.3")
-                        sig = msg[8 : 8 + ((msg[6] << 8) | msg[7])]
-                        content = b" " * 64 + b"TLS 1.3, server CertificateVerify\x00" + h(transcript).digest()
-                        self._verify_signature(cert_key, scheme, sig, content)
-                        cert_verified = True
-                    elif msg[0] == 20:
-                        sfk = self._expand_label(s_hs, b"finished", b"", hlen, h)
-                        expected = hmac.new(sfk, h(transcript).digest(), h).digest()
-                        if not cert_verified or not hmac.compare_digest(msg[4:], expected):
-                            raise ConnectionError("server Finished verify failed")
-                    transcript += msg
-                    if msg[0] == 20:
-                        got_fin = True
-                        break
-
-            fk = self._expand_label(c_hs, b"finished", b"", hlen, h)
-            vd = hmac.new(fk, h(transcript).digest(), h).digest()
-            fin = struct.pack("!B", 20) + struct.pack("!I", len(vd))[1:] + vd
-            self._sock.sendall(b"\x14\x03\x03\x00\x01\x01")
-            inner = fin + b"\x16"
-            aad = b"\x17\x03\x03" + struct.pack("!H", len(inner) + 16)
-            nonce = bytes(a ^ b for a, b in zip(c_hs_iv, b"\x00\x00\x00\x00" + struct.pack("!Q", 0)))
-            cipher = ChaCha20Poly1305(c_hs_key) if self._cipher == 0x1303 else AESGCM(c_hs_key)
-            ct = cipher.encrypt(nonce, inner, aad)
-            self._sock.sendall(b"\x17\x03\x03" + struct.pack("!H", len(ct)) + ct)
-
-            derived2 = self._expand_label(hs_secret, b"derived", h(b"").digest(), hlen, h)
-            master = hmac.new(derived2, zero, h).digest()
-            self._c_ap = self._expand_label(master, b"c ap traffic", h(transcript).digest(), hlen, h)
-            self._s_ap = self._expand_label(master, b"s ap traffic", h(transcript).digest(), hlen, h)
-            self._c_key = self._expand_label(self._c_ap, b"key", b"", self._keylen, h)
-            self._c_iv = self._expand_label(self._c_ap, b"iv", b"", 12, h)
-            self._s_key = self._expand_label(self._s_ap, b"key", b"", self._keylen, h)
-            self._s_iv = self._expand_label(self._s_ap, b"iv", b"", 12, h)
-            self._cseq = 0
-            self._sseq = 0
+                self._sock = ssl.create_default_context().wrap_socket(raw, server_hostname=self._sni)
+            except BaseException:
+                raw.close()
+                raise
+            self._sock.settimeout(self._timeout)
             return self
-
-        def _handshake_tls12(self, transcript, sh):
-            self._tls12 = True
-            server_random = sh[6:38]
-            if server_random[-8:-1] == b"DOWNGRD":
-                raise ConnectionError("TLS downgrade detected")
-            ske = None
-            cert_key = None
-            got_shd = False
-            buf = sh
-            while not got_shd:
-                while len(buf) >= 4:
-                    mlen = (buf[1] << 16) | (buf[2] << 8) | buf[3]
-                    if len(buf) < 4 + mlen:
-                        break
-                    msg = buf[: 4 + mlen]
-                    buf = buf[4 + mlen :]
-                    transcript += msg
-                    if msg[0] == 11:
-                        cert_key = self._verify_chain(msg[4:], False)
-                    elif msg[0] == 12:
-                        ske = msg[4 : 4 + mlen]
-                    elif msg[0] == 14:
-                        got_shd = True
-                        break
-                if got_shd:
-                    break
-                typ, body = self._read_record()
-                if typ == 21:
-                    raise ConnectionError(f"server sent alert {body[1]}" if len(body) >= 2 else "server sent alert")
-                if typ != 22:
-                    continue
-                buf += body
-            if ske is None or cert_key is None:
-                raise ConnectionError("no ServerKeyExchange or Certificate")
-            named_curve = (ske[1] << 8) | ske[2]
-            pk_len = ske[3]
-            server_pub = ske[4 : 4 + pk_len]
-            sig_at = 4 + pk_len
-            sig = ske[sig_at + 4 : sig_at + 4 + ((ske[sig_at + 2] << 8) | ske[sig_at + 3])]
-            self._verify_signature(
-                cert_key,
-                (ske[sig_at] << 8) | ske[sig_at + 1],
-                sig,
-                self._client_random + server_random + ske[:sig_at],
-            )
-            if named_curve == 0x001D:
-                my = x25519.X25519PrivateKey.generate()
-                my_pub = my.public_key().public_bytes_raw()
-                shared = my.exchange(x25519.X25519PublicKey.from_public_bytes(server_pub))
-            else:
-                curve = {0x0017: ec.SECP256R1(), 0x0018: ec.SECP384R1(), 0x0019: ec.SECP521R1()}[named_curve]
-                my = ec.generate_private_key(curve)
-                my_pub = my.public_key().public_bytes(Encoding.X962, PublicFormat.UncompressedPoint)
-                shared = my.exchange(ec.ECDH(), ec.EllipticCurvePublicKey.from_encoded_point(curve, server_pub))
-            self._h = (
-                hashlib.sha384 if self._cipher in (0xC030, 0xC02C, 0xC024, 0xC028, 0x009F, 0x006B) else hashlib.sha256
-            )
-            ph = self._h
-            self._keylen = 32 if self._cipher in (0xC030, 0xC02C, 0x009D, 0xCCA8, 0xCCA9, 0x1302, 0x1303) else 16
-            keylen = self._keylen
-            cke_body = bytes([len(my_pub)]) + my_pub
-            cke = bytes([16]) + struct.pack("!I", len(cke_body))[1:] + cke_body
-            transcript += cke
-            if self._ems:
-                master = self._prf(shared, b"extended master secret", ph(transcript).digest(), 48, ph)
-            else:
-                master = self._prf(shared, b"master secret", self._client_random + server_random, 48, ph)
-            ivlen = 12 if self._cipher in (0xCCA8, 0xCCA9) else 4
-            kb = self._prf(master, b"key expansion", server_random + self._client_random, 2 * keylen + 2 * ivlen, ph)
-            self._c_key = kb[0:keylen]
-            self._s_key = kb[keylen : 2 * keylen]
-            self._c_iv = kb[2 * keylen : 2 * keylen + ivlen]
-            self._s_iv = kb[2 * keylen + ivlen : 2 * keylen + 2 * ivlen]
-            self._cseq = 0
-            self._sseq = 0
-            self._sock.sendall(b"\x16\x03\x03" + struct.pack("!H", len(cke)) + cke)
-            self._sock.sendall(b"\x14\x03\x03\x00\x01\x01")
-            vd = self._prf(master, b"client finished", ph(transcript).digest(), 12, ph)
-            fin = bytes([20]) + struct.pack("!I", len(vd))[1:] + vd
-            transcript += fin
-            enc = self._encrypt12(22, fin)
-            self._sock.sendall(b"\x16\x03\x03" + struct.pack("!H", len(enc)) + enc)
-            ccs_seen = False
-            while True:
-                typ, body = self._read_record()
-                if typ == 20:
-                    ccs_seen = True
-                    continue
-                if typ == 21:
-                    raise ConnectionError("alert")
-                if typ == 22:
-                    if ccs_seen:
-                        svd = self._prf(master, b"server finished", ph(transcript).digest(), 12, ph)
-                        if not hmac.compare_digest(self._decrypt12(22, body), b"\x14\x00\x00\x0c" + svd):
-                            raise ConnectionError("server Finished verify failed")
-                        break
-                    transcript += body
-                    continue
-            return self
-
-        def _encrypt12(self, content_type, plaintext):
-            chacha = self._cipher in (0xCCA8, 0xCCA9)
-            cipher = ChaCha20Poly1305(self._c_key) if chacha else AESGCM(self._c_key)
-            aad = (
-                struct.pack("!Q", self._cseq) + bytes([content_type]) + b"\x03\x03" + struct.pack("!H", len(plaintext))
-            )
-            if chacha:
-                nonce = bytes(a ^ b for a, b in zip(self._c_iv, b"\x00\x00\x00\x00" + struct.pack("!Q", self._cseq)))
-                ct = cipher.encrypt(nonce, plaintext, aad)
-                self._cseq += 1
-                return ct
-            explicit = struct.pack("!Q", self._cseq)
-            ct = cipher.encrypt(self._c_iv + explicit, plaintext, aad)
-            self._cseq += 1
-            return explicit + ct
-
-        def _decrypt12(self, content_type, body):
-            chacha = self._cipher in (0xCCA8, 0xCCA9)
-            cipher = ChaCha20Poly1305(self._s_key) if chacha else AESGCM(self._s_key)
-            if chacha:
-                nonce = bytes(a ^ b for a, b in zip(self._s_iv, b"\x00\x00\x00\x00" + struct.pack("!Q", self._sseq)))
-                aad = (
-                    struct.pack("!Q", self._sseq)
-                    + bytes([content_type])
-                    + b"\x03\x03"
-                    + struct.pack("!H", len(body) - 16)
-                )
-                pt = cipher.decrypt(nonce, body, aad)
-                self._sseq += 1
-                return pt
-            explicit = body[:8]
-            ct = body[8:]
-            aad = struct.pack("!Q", self._sseq) + bytes([content_type]) + b"\x03\x03" + struct.pack("!H", len(ct) - 16)
-            pt = cipher.decrypt(self._s_iv + explicit, ct, aad)
-            self._sseq += 1
-            return pt
 
         def send(self, data):
-            data = bytes(data)
-            total = 0
-            while data:
-                chunk = data[:16384]
-                data = data[16384:]
-                if self._tls12:
-                    enc = self._encrypt12(23, chunk)
-                else:
-                    inner = chunk + b"\x17"
-                    aad = b"\x17\x03\x03" + struct.pack("!H", len(inner) + 16)
-                    nonce = bytes(
-                        a ^ b for a, b in zip(self._c_iv, b"\x00\x00\x00\x00" + struct.pack("!Q", self._cseq))
-                    )
-                    cipher = ChaCha20Poly1305(self._c_key) if self._cipher == 0x1303 else AESGCM(self._c_key)
-                    enc = cipher.encrypt(nonce, inner, aad)
-                    self._cseq += 1
-                self._sock.sendall(b"\x17\x03\x03" + struct.pack("!H", len(enc)) + enc)
-                total += len(chunk)
-            return total
-
-        sendall = send
-
-        def _fill_once(self):
-            try:
-                d = self._sock.recv(65536)
-            except BlockingIOError:
-                return False
-            except OSError as ex:
-                if ex.errno in (errno.EAGAIN, errno.EWOULDBLOCK):
-                    return False
-                raise
-            if not d:
-                raise ConnectionError("connection closed")
-            self._rbuf += d
-            processed = False
-            while len(self._rbuf) >= 5:
-                ln = (self._rbuf[3] << 8) | self._rbuf[4]
-                if len(self._rbuf) < 5 + ln:
-                    break
-                typ = self._rbuf[0]
-                body = self._rbuf[5 : 5 + ln]
-                self._rbuf = self._rbuf[5 + ln :]
-                processed = True
-                if typ == 20:
-                    continue
-                if typ == 21:
-                    raise ConnectionError("tls alert")
-                if self._tls12:
-                    pt = self._decrypt12(typ, body)
-                    if typ == 23:
-                        self._appbuf += pt
-                    continue
-                aad = bytes([typ]) + b"\x03\x03" + struct.pack("!H", len(body))
-                nonce = bytes(a ^ b for a, b in zip(self._s_iv, b"\x00\x00\x00\x00" + struct.pack("!Q", self._sseq)))
-                cipher = ChaCha20Poly1305(self._s_key) if self._cipher == 0x1303 else AESGCM(self._s_key)
-                pt = cipher.decrypt(nonce, body, aad)
-                self._sseq += 1
-                pt = pt.rstrip(b"\x00")
-                if not pt:
-                    continue
-                it = pt[-1]
-                payload = pt[:-1]
-                if it == 23:
-                    self._appbuf += payload
-                elif it == 22:
-                    m = payload
-                    while len(m) >= 4:
-                        mt = m[0]
-                        mlen = (m[1] << 16) | (m[2] << 8) | m[3]
-                        mbody = m[4 : 4 + mlen]
-                        m = m[4 + mlen :]
-                        if mt == 0x18:
-                            request = mbody[0] if mbody else 0
-                            self._s_ap = self._expand_label(self._s_ap, b"traffic upd", b"", self._hlen, self._h)
-                            self._s_key = self._expand_label(self._s_ap, b"key", b"", self._keylen, self._h)
-                            self._s_iv = self._expand_label(self._s_ap, b"iv", b"", 12, self._h)
-                            self._sseq = 0
-                            if request == 1:
-                                upd = b"\x18\x00\x00\x01\x00" + b"\x16"
-                                uaad = b"\x17\x03\x03" + struct.pack("!H", len(upd) + 16)
-                                unonce = bytes(
-                                    a ^ b
-                                    for a, b in zip(self._c_iv, b"\x00\x00\x00\x00" + struct.pack("!Q", self._cseq))
-                                )
-                                ucipher = (
-                                    ChaCha20Poly1305(self._c_key) if self._cipher == 0x1303 else AESGCM(self._c_key)
-                                )
-                                uct = ucipher.encrypt(unonce, upd, uaad)
-                                self._cseq += 1
-                                self._sock.sendall(b"\x17\x03\x03" + struct.pack("!H", len(uct)) + uct)
-                                self._c_ap = self._expand_label(self._c_ap, b"traffic upd", b"", self._hlen, self._h)
-                                self._c_key = self._expand_label(self._c_ap, b"key", b"", self._keylen, self._h)
-                                self._c_iv = self._expand_label(self._c_ap, b"iv", b"", 12, self._h)
-                                self._cseq = 0
-                elif it == 21:
-                    raise ConnectionError("tls alert")
-            return processed
+            self._sock.sendall(data)
 
         def recv(self, n=4096):
-            while not self._appbuf:
-                got = self._fill_once()
-                if not got:
-                    if self._sock.gettimeout() == 0.0:
-                        raise BlockingIOError(errno.EAGAIN, "no data")
-                    continue
-            r = self._appbuf[:n]
-            self._appbuf = self._appbuf[n:]
-            return r
-
-        def pending(self):
-            return len(self._appbuf)
+            data = self._sock.recv(n)
+            if not data:
+                raise ConnectionError("connection closed")
+            return data
 
     class DreameClient(Client):
-        def _create_socket_connection(self):
-            timeout = getattr(self, "_connect_timeout", 15) or 15
-            return DreameVacuumDreameHomeCloudProtocol.DreameTLSSocket(
-                self._host, int(self._port), self._host, timeout, self._userdata._strings, private_ca=True
-            ).connect()
-
         def _packet_queue(self, command, packet, *args, **kwargs):
             if command == 0x10:
                 packet = bytearray(packet)
@@ -1153,6 +593,10 @@ class DreameVacuumDreameHomeCloudProtocol:
                             self._client.on_disconnect = DreameVacuumDreameHomeCloudProtocol._on_client_disconnect
                             self._client.on_message = DreameVacuumDreameHomeCloudProtocol._on_client_message
                             self._client.reconnect_delay_set(1, 15)
+                            # Verify the broker: Dreame's MQTT endpoints use a private CA (pinned
+                            # in dreame_iot_mqtt_ca.pem), with hostname checking left on.
+                            self._client.tls_set(ca_certs=MQTT_CA_FILE, cert_reqs=ssl.CERT_REQUIRED)
+                            self._client.tls_insecure_set(False)
                             self._client_key = None
                             self._set_client_key()
                             self._client.connect_timeout = 10
