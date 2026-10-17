@@ -7947,8 +7947,8 @@ class DreameVacuumDevice:
                 return 10 if self.status.active else 30
             now = time.time()
             if now - self._last_map_request <= 120 or now - self._last_change <= 60:
-                return 2.5 if self.status.active or self.status.started else 5
-            return 3 if self.status.running else 10 if self.status.active else 30
+                return 1.5 if self.status.active or self.status.started else 5
+            return 1.5 if self.status.running else 10 if self.status.active else 30
         return -1
 
     @property
